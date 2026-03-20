@@ -1,0 +1,132 @@
+{
+  "info": {
+    "name": "Medical Records API",
+    "description": "Blockchain-based Medical Records Management System",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Upload Medical Record",
+      "request": {
+        "method": "POST",
+        "header": [],
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {
+              "key": "file",
+              "type": "file",
+              "src": ""
+            },
+            {
+              "key": "patientId",
+              "value": "P001",
+              "type": "text"
+            },
+            {
+              "key": "doctorId",
+              "value": "D001",
+              "type": "text"
+            },
+            {
+              "key": "recordType",
+              "value": "Lab Report",
+              "type": "text"
+            }
+          ]
+        },
+        "url": {
+          "raw": "http://localhost:8080/api/records/upload",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "upload"]
+        }
+      }
+    },
+    {
+      "name": "Get Patient Records",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/records/patient/P001",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "patient", "P001"]
+        }
+      }
+    },
+    {
+      "name": "Get Doctor Records",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/records/doctor/D001",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "doctor", "D001"]
+        }
+      }
+    },
+    {
+      "name": "Get Record by ID",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/records/{{recordId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "{{recordId}}"]
+        }
+      }
+    },
+    {
+      "name": "Verify Record",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/records/verify/{{recordId}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "verify", "{{recordId}}"]
+        }
+      }
+    },
+    {
+      "name": "Download Record",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/records/download/{{ipfsHash}}",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "download", "{{ipfsHash}}"]
+        }
+      }
+    },
+    {
+      "name": "Health Check",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "http://localhost:8080/api/records/health",
+          "protocol": "http",
+          "host": ["localhost"],
+          "port": "8080",
+          "path": ["api", "records", "health"]
+        }
+      }
+    }
+  ]
+}
