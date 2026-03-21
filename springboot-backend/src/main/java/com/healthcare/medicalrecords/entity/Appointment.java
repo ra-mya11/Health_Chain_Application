@@ -14,8 +14,20 @@ public class Appointment {
     @Column(name = "patient_id")
     private Long patientId;
 
+    @Column(name = "patient_email", length = 150)
+    private String patientEmail;
+
+    @Column(name = "patient_name", length = 150)
+    private String patientName;
+
     @Column(name = "doctor_id")
     private Long doctorId;
+
+    @Column(name = "doctor_email", length = 150)
+    private String doctorEmail;
+
+    @Column(name = "doctor_name", length = 150)
+    private String doctorName;
 
     @Column(name = "scheduled_at")
     private LocalDateTime scheduledAt;
@@ -43,33 +55,115 @@ public class Appointment {
         this.status = "SCHEDULED";
     }
 
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
+    public Long getId() {
+        return id;
+    }
 
-    public Long getPatientId() { return patientId; }
-    public void setPatientId(Long patientId) { this.patientId = patientId; }
+    public void setId(Long id) {
+        this.id = id;
+    }
 
-    public Long getDoctorId() { return doctorId; }
-    public void setDoctorId(Long doctorId) { this.doctorId = doctorId; }
+    public Long getPatientId() {
+        return patientId;
+    }
 
-    public LocalDateTime getScheduledAt() { return scheduledAt; }
-    public void setScheduledAt(LocalDateTime scheduledAt) { this.scheduledAt = scheduledAt; }
+    public void setPatientId(Long patientId) {
+        this.patientId = patientId;
+    }
 
-    public String getStatus() { return status; }
-    public void setStatus(String status) { this.status = status; }
+    public String getPatientEmail() {
+        return patientEmail;
+    }
 
-    public String getNotes() { return notes; }
-    public void setNotes(String notes) { this.notes = notes; }
+    public void setPatientEmail(String patientEmail) {
+        this.patientEmail = patientEmail;
+    }
 
-    public String getDepartment() { return department; }
-    public void setDepartment(String department) { this.department = department; }
+    public String getPatientName() {
+        return patientName;
+    }
 
-    public String getTimeSlot() { return timeSlot; }
-    public void setTimeSlot(String timeSlot) { this.timeSlot = timeSlot; }
+    public void setPatientName(String patientName) {
+        this.patientName = patientName;
+    }
 
-    public String getReason() { return reason; }
-    public void setReason(String reason) { this.reason = reason; }
+    public Long getDoctorId() {
+        return doctorId;
+    }
 
-    public LocalDateTime getCreatedAt() { return createdAt; }
-    public void setCreatedAt(LocalDateTime createdAt) { this.createdAt = createdAt; }
+    public void setDoctorId(Long doctorId) {
+        this.doctorId = doctorId;
+    }
+
+    public String getDoctorEmail() {
+        return doctorEmail;
+    }
+
+    public void setDoctorEmail(String doctorEmail) {
+        this.doctorEmail = doctorEmail;
+    }
+
+    public String getDoctorName() {
+        return doctorName;
+    }
+
+    public void setDoctorName(String doctorName) {
+        this.doctorName = doctorName;
+    }
+
+    public LocalDateTime getScheduledAt() {
+        return scheduledAt;
+    }
+
+    public void setScheduledAt(LocalDateTime scheduledAt) {
+        this.scheduledAt = scheduledAt;
+    }
+
+    public String getStatus() {
+        return status;
+    }
+
+    public void setStatus(String status) {
+        this.status = status;
+    }
+
+    public String getNotes() {
+        return notes;
+    }
+
+    public void setNotes(String notes) {
+        this.notes = notes;
+    }
+
+    public String getDepartment() {
+        return department;
+    }
+
+    public void setDepartment(String department) {
+        this.department = department;
+    }
+
+    public String getTimeSlot() {
+        return timeSlot;
+    }
+
+    public void setTimeSlot(String timeSlot) {
+        this.timeSlot = timeSlot;
+    }
+
+    public String getReason() {
+        return reason;
+    }
+
+    public void setReason(String reason) {
+        this.reason = reason;
+    }
+
+    public LocalDateTime getCreatedAt() {
+        return createdAt;
+    }
+
+    public void setCreatedAt(LocalDateTime createdAt) {
+        this.createdAt = createdAt;
+    }
 }

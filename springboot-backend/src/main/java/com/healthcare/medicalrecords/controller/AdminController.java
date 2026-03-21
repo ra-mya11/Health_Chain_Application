@@ -85,7 +85,7 @@ public class AdminController {
 
     @PutMapping("/departments/{id}")
     public ResponseEntity<DepartmentDto> updateDepartment(@PathVariable Long id,
-                                                          @RequestBody Department updated) {
+            @RequestBody Department updated) {
         DepartmentDto dept = adminService.updateDepartment(id, updated);
         adminService.logAuditAction(getCurrentAdminId(), "UPDATE_DEPARTMENT", "Department", id,
                 "Department updated: " + updated.getName());
@@ -96,7 +96,8 @@ public class AdminController {
     public ResponseEntity<?> deleteDepartment(@PathVariable Long id) {
         try {
             adminService.deleteDepartment(id);
-            adminService.logAuditAction(getCurrentAdminId(), "DELETE_DEPARTMENT", "Department", id, "Department deleted");
+            adminService.logAuditAction(getCurrentAdminId(), "DELETE_DEPARTMENT", "Department", id,
+                    "Department deleted");
             return ResponseEntity.ok("Department deleted");
         } catch (RuntimeException e) {
             return ResponseEntity.badRequest().body(java.util.Map.of("message", e.getMessage()));
@@ -105,7 +106,7 @@ public class AdminController {
 
     @PutMapping("/departments/{id}/assign-doctors")
     public ResponseEntity<DepartmentDto> assignDoctors(@PathVariable Long id,
-                                                        @RequestBody java.util.List<Long> doctorIds) {
+            @RequestBody java.util.List<Long> doctorIds) {
         return ResponseEntity.ok(adminService.assignDoctors(id, doctorIds));
     }
 
@@ -119,7 +120,8 @@ public class AdminController {
             @RequestParam(required = false) Long departmentId,
             @RequestParam(required = false) Double consultationFee,
             @RequestParam(required = false) String availability) {
-        Doctor doc = adminService.registerDoctorFull(userId, specialization, experienceYears, departmentId, consultationFee, availability);
+        Doctor doc = adminService.registerDoctorFull(userId, specialization, experienceYears, departmentId,
+                consultationFee, availability);
         adminService.logAuditAction(getCurrentAdminId(), "REGISTER_DOCTOR", "Doctor", userId,
                 "Doctor registered: " + specialization);
         return ResponseEntity.ok(DoctorDto.from(doc));
@@ -149,7 +151,8 @@ public class AdminController {
             @RequestParam(required = false) Double consultationFee,
             @RequestParam(required = false) Boolean isAvailable,
             @RequestParam(required = false) String availability) {
-        Doctor doc = adminService.updateDoctorFull(userId, specialization, experienceYears, departmentId, consultationFee, isAvailable, availability);
+        Doctor doc = adminService.updateDoctorFull(userId, specialization, experienceYears, departmentId,
+                consultationFee, isAvailable, availability);
         adminService.logAuditAction(getCurrentAdminId(), "UPDATE_DOCTOR", "Doctor", userId,
                 "Doctor updated: " + specialization);
         return ResponseEntity.ok(DoctorDto.from(doc));
@@ -157,7 +160,7 @@ public class AdminController {
 
     @PatchMapping("/doctors/{userId}/availability")
     public ResponseEntity<DoctorDto> toggleAvailability(@PathVariable Long userId,
-                                                         @RequestParam boolean available) {
+            @RequestParam boolean available) {
         Doctor doc = adminService.updateDoctorFull(userId, null, null, null, null, available, null);
         return ResponseEntity.ok(DoctorDto.from(doc));
     }
@@ -172,12 +175,13 @@ public class AdminController {
     // ============ APPOINTMENT MANAGEMENT ============
 
     @GetMapping("/appointments")
-    public ResponseEntity<List<Appointment>> listAppointments() {
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> listAppointments() {
         return ResponseEntity.ok(adminService.getAllAppointments());
     }
 
     @GetMapping("/appointments/status/{status}")
-    public ResponseEntity<List<Appointment>> getAppointmentsByStatus(@PathVariable String status) {
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getAppointmentsByStatus(
+            @PathVariable String status) {
         return ResponseEntity.ok(adminService.getAppointmentsByStatus(status));
     }
 
@@ -270,7 +274,8 @@ public class AdminController {
             if (auth != null && auth.getPrincipal() instanceof String principal) {
                 return Long.parseLong(principal);
             }
-        } catch (Exception ignored) {}
+        } catch (Exception ignored) {
+        }
         return null;
     }
 }

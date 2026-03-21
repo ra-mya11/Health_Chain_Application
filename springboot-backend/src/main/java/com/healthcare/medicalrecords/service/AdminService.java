@@ -20,15 +20,24 @@ import java.util.stream.Collectors;
 @Service
 public class AdminService {
 
-    @Autowired private AdminUserRepository userRepository;
-    @Autowired private UserRepository mongoUserRepository;
-    @Autowired private DepartmentRepository departmentRepository;
-    @Autowired private DoctorRepository doctorRepository;
-    @Autowired private AppointmentRepository appointmentRepository;
-    @Autowired private MedicalRecordRepository recordRepository;
-    @Autowired private PredictionLogRepository predictionLogRepository;
-    @Autowired private NotificationRepository notificationRepository;
-    @Autowired private AuditLogRepository auditLogRepository;
+    @Autowired
+    private AdminUserRepository userRepository;
+    @Autowired
+    private UserRepository mongoUserRepository;
+    @Autowired
+    private DepartmentRepository departmentRepository;
+    @Autowired
+    private DoctorRepository doctorRepository;
+    @Autowired
+    private AppointmentRepository appointmentRepository;
+    @Autowired
+    private MedicalRecordRepository recordRepository;
+    @Autowired
+    private PredictionLogRepository predictionLogRepository;
+    @Autowired
+    private NotificationRepository notificationRepository;
+    @Autowired
+    private AuditLogRepository auditLogRepository;
 
     // ============ USER MANAGEMENT ============
 
@@ -125,7 +134,8 @@ public class AdminService {
         Department dept = getDepartment(deptId);
         long count = doctorRepository.countByDepartment(dept);
         if (count > 0) {
-            throw new RuntimeException("Cannot delete department with " + count + " assigned doctor(s). Reassign them first.");
+            throw new RuntimeException(
+                    "Cannot delete department with " + count + " assigned doctor(s). Reassign them first.");
         }
         departmentRepository.deleteById(deptId);
     }
@@ -167,24 +177,25 @@ public class AdminService {
     }
 
     public Doctor registerDoctorFull(Long userId, String specialization, Integer yearsExp,
-                                     Long deptId, Double consultationFee, String availability) {
+            Long deptId, Double consultationFee, String availability) {
         // Ensure user exists in MySQL — sync from MongoDB if needed
         if (!userRepository.existsById(userId)) {
             mongoUserRepository.findAll().stream()
-                .filter(u -> u.getEmail() != null)
-                .forEach(u -> {
-                    if (!userRepository.existsByEmail(u.getEmail())) {
-                        User mysqlUser = new User();
-                        mysqlUser.setEmail(u.getEmail());
-                        mysqlUser.setName(u.getName());
-                        mysqlUser.setPassword(u.getPassword() != null ? u.getPassword() : "");
-                        mysqlUser.setRole(u.getRole() != null ? u.getRole().toUpperCase() : "PATIENT");
-                        mysqlUser.setPhone(u.getPhone());
-                        mysqlUser.setEnabled(true);
-                        mysqlUser.setCreatedAt(u.getCreatedAt() != null ? u.getCreatedAt() : java.time.LocalDateTime.now());
-                        userRepository.save(mysqlUser);
-                    }
-                });
+                    .filter(u -> u.getEmail() != null)
+                    .forEach(u -> {
+                        if (!userRepository.existsByEmail(u.getEmail())) {
+                            User mysqlUser = new User();
+                            mysqlUser.setEmail(u.getEmail());
+                            mysqlUser.setName(u.getName());
+                            mysqlUser.setPassword(u.getPassword() != null ? u.getPassword() : "");
+                            mysqlUser.setRole(u.getRole() != null ? u.getRole().toUpperCase() : "PATIENT");
+                            mysqlUser.setPhone(u.getPhone());
+                            mysqlUser.setEnabled(true);
+                            mysqlUser.setCreatedAt(
+                                    u.getCreatedAt() != null ? u.getCreatedAt() : java.time.LocalDateTime.now());
+                            userRepository.save(mysqlUser);
+                        }
+                    });
         }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("User not found with id: " + userId));
@@ -250,14 +261,19 @@ public class AdminService {
     }
 
     public Doctor updateDoctorFull(Long userId, String specialization, Integer yearsExp,
-                                   Long deptId, Double consultationFee, Boolean isAvailable, String availability) {
+            Long deptId, Double consultationFee, Boolean isAvailable, String availability) {
         Doctor doctor = doctorRepository.findById(userId)
                 .orElseThrow(() -> new RuntimeException("Doctor not found"));
-        if (specialization != null) doctor.setSpecialization(specialization);
-        if (yearsExp != null) doctor.setExperienceYears(yearsExp);
-        if (consultationFee != null) doctor.setConsultationFee(consultationFee);
-        if (isAvailable != null) doctor.setIsAvailable(isAvailable);
-        if (availability != null) doctor.setAvailability(availability);
+        if (specialization != null)
+            doctor.setSpecialization(specialization);
+        if (yearsExp != null)
+            doctor.setExperienceYears(yearsExp);
+        if (consultationFee != null)
+            doctor.setConsultationFee(consultationFee);
+        if (isAvailable != null)
+            doctor.setIsAvailable(isAvailable);
+        if (availability != null)
+            doctor.setAvailability(availability);
         if (deptId != null) {
             Department dept = departmentRepository.findById(deptId)
                     .orElseThrow(() -> new RuntimeException("Department not found"));
@@ -268,12 +284,101 @@ public class AdminService {
 
     // ============ APPOINTMENT MANAGEMENT ============
 
-    public List<Appointment> getAllAppointments() {
-        return appointmentRepository.findAll();
+    public java.util.List<java.util.Map<String, Object>> getAllAppointments() {
+        return appointmentRepository.findAll().stream()
+                .map(this::mapAppointmentWithNames)
+                .collect(Collectors.toList());
     }
 
-    public List<Appointment> getAppointmentsByStatus(String status) {
-        return appointmentRepository.findByStatus(status);
+    public java.util.List<java.util.Map<String, Object>> getAppointmentsByStatus(String status) {
+        return appointmentRepository.findByStatus(status).stream()
+                .map(this::mapAppointmentWithNames)
+                .collect(Collectors.toList());
+    }
+
+    private java.util.Map<String, Object> mapAppointmentWithNames(Appointment apt) {
+        java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
+        map.put("id", apt.getId());
+        map.put("patientId", apt.getPatientId());
+        map.put("doctorId", apt.getDoctorId());
+        map.put("scheduledAt", apt.getScheduledAt());
+        map.put("status", apt.getStatus());
+        map.put("notes", apt.getNotes());
+        map.put("department", apt.getDepartment());
+        map.put("timeSlot", apt.getTimeSlot());
+        map.put("reason", apt.getReason());
+        map.put("createdAt", apt.getCreatedAt());
+
+        // Add patient info with nested object for fallback resolution
+        if (apt.getPatientId() != null) {
+            userRepository.findById(apt.getPatientId()).ifPresent(u -> {
+                java.util.Map<String, Object> patientMap = new java.util.LinkedHashMap<>();
+                patientMap.put("id", u.getId());
+                patientMap.put("name", u.getName());
+                patientMap.put("email", u.getEmail());
+                map.put("patient", patientMap);
+                if (u.getName() != null && !u.getName().isBlank()) {
+                    map.put("patientName", u.getName());
+                }
+            });
+        }
+
+        // Use fallback patient name if database lookup failed
+        if (!map.containsKey("patientName") && apt.getPatientName() != null && !apt.getPatientName().isBlank()) {
+            map.put("patientName", apt.getPatientName());
+            // Also put it in patient object when name lookup failed
+            if (!map.containsKey("patient")) {
+                java.util.Map<String, Object> patientMap = new java.util.LinkedHashMap<>();
+                patientMap.put("name", apt.getPatientName());
+                if (apt.getPatientEmail() != null)
+                    patientMap.put("email", apt.getPatientEmail());
+                map.put("patient", patientMap);
+            }
+        }
+
+        // If still missing patientName, fall back to patientEmail if present
+        if (!map.containsKey("patientName") && apt.getPatientEmail() != null && !apt.getPatientEmail().isBlank()) {
+            map.put("patientName", apt.getPatientEmail());
+            if (!map.containsKey("patient")) {
+                java.util.Map<String, Object> patientMap = new java.util.LinkedHashMap<>();
+                patientMap.put("email", apt.getPatientEmail());
+                map.put("patient", patientMap);
+            }
+        }
+
+        // Add doctor info with nested object for fallback resolution
+        if (apt.getDoctorId() != null) {
+            doctorRepository.findById(apt.getDoctorId()).ifPresent(doc -> {
+                java.util.Map<String, Object> doctorMap = new java.util.LinkedHashMap<>();
+                doctorMap.put("userId", doc.getUserId());
+                doctorMap.put("specialization", doc.getSpecialization());
+                String doctorName = null;
+                if (doc.getUser() != null) {
+                    doctorMap.put("name", doc.getUser().getName());
+                    doctorMap.put("email", doc.getUser().getEmail());
+                    doctorName = doc.getUser().getName();
+                }
+                map.put("doctor", doctorMap);
+                if (doctorName != null && !doctorName.isBlank()) {
+                    map.put("doctorName", doctorName);
+                }
+            });
+        }
+
+        // Use fallback doctor name if database lookup failed
+        if (!map.containsKey("doctorName") && apt.getDoctorName() != null && !apt.getDoctorName().isBlank()) {
+            map.put("doctorName", apt.getDoctorName());
+            // Also put it in doctor object when name lookup failed
+            if (!map.containsKey("doctor")) {
+                java.util.Map<String, Object> doctorMap = new java.util.LinkedHashMap<>();
+                doctorMap.put("name", apt.getDoctorName());
+                if (apt.getDoctorEmail() != null)
+                    doctorMap.put("email", apt.getDoctorEmail());
+                map.put("doctor", doctorMap);
+            }
+        }
+
+        return map;
     }
 
     public Appointment cancelAppointment(Long appointmentId) {

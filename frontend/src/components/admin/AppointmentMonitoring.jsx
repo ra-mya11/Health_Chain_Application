@@ -14,9 +14,10 @@ export default function AppointmentMonitoring() {
       } else {
         res = await adminApi.fetchAllAppointments();
       }
-      setAppointments(Array.isArray(res) ? res : []);
+      setAppointments(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error("Failed to fetch appointments:", error);
+      setAppointments([]);
     } finally {
       setLoading(false);
     }
@@ -51,6 +52,23 @@ export default function AppointmentMonitoring() {
       default:
         return "bg-gray-100 text-gray-700";
     }
+  };
+
+  const resolveName = (nameField, nestedObj) => {
+    const innerName = nestedObj?.name;
+    if (
+      innerName &&
+      innerName.trim() !== "" &&
+      innerName.trim().toUpperCase() !== "N/A"
+    )
+      return innerName;
+    if (
+      nameField &&
+      nameField.trim() !== "" &&
+      nameField.trim().toUpperCase() !== "N/A"
+    )
+      return nameField;
+    return "N/A";
   };
 
   if (loading)
@@ -129,10 +147,10 @@ export default function AppointmentMonitoring() {
             {appointments.map((apt) => (
               <tr key={apt.id} className="hover:bg-gray-50">
                 <td className="px-6 py-4 whitespace-nowrap font-medium">
-                  {apt.patientName || "N/A"}
+                  {resolveName(apt.patientName, apt.patient)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  Dr. {apt.doctorName || "N/A"}
+                  Dr. {resolveName(apt.doctorName, apt.doctor)}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm">
                   {apt.department || "N/A"}

@@ -14,6 +14,8 @@ public interface AppointmentRepository extends JpaRepository<Appointment, Long> 
 
     List<Appointment> findByDoctorId(Long doctorId);
 
+    List<Appointment> findByDoctorIdAndStatusNot(Long doctorId, String status);
+
     List<Appointment> findByStatus(String status);
 
     @Query("SELECT a FROM Appointment a WHERE a.scheduledAt BETWEEN ?1 AND ?2")
