@@ -39,6 +39,18 @@ export default function AppointmentMonitoring() {
     }
   };
 
+  const handleCompleteAppointment = async (aptId) => {
+    if (window.confirm("Mark this appointment as completed?")) {
+      try {
+        await adminApi.completeAppointment(aptId);
+        fetchAppointments();
+        alert("Appointment marked as completed");
+      } catch (err) {
+        alert("Failed to complete appointment");
+      }
+    }
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case "SCHEDULED":
@@ -168,13 +180,24 @@ export default function AppointmentMonitoring() {
                   </span>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  {apt.status === "SCHEDULED" && (
-                    <button
-                      onClick={() => handleCancelAppointment(apt.id)}
-                      className="text-red-600 hover:text-red-800 px-3 py-1 border rounded text-sm"
-                    >
-                      Cancel
-                    </button>
+                  {apt.status !== "COMPLETED" && apt.status !== "CANCELLED" && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleCompleteAppointment(apt.id)}
+                        className="text-green-600 hover:text-green-800 px-3 py-1 border border-green-300 rounded text-sm hover:bg-green-50"
+                        title="Mark as completed"
+                      >
+                        Clear
+                      </button>
+                      {apt.status === "SCHEDULED" && (
+                        <button
+                          onClick={() => handleCancelAppointment(apt.id)}
+                          className="text-red-600 hover:text-red-800 px-3 py-1 border rounded text-sm"
+                        >
+                          Cancel
+                        </button>
+                      )}
+                    </div>
                   )}
                 </td>
               </tr>

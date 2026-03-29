@@ -13,6 +13,9 @@ import org.web3j.abi.datatypes.generated.Uint256;
 import org.web3j.crypto.Credentials;
 import org.web3j.protocol.Web3j;
 import org.web3j.protocol.core.methods.response.EthSendTransaction;
+import org.web3j.protocol.core.methods.response.EthTransaction;
+import org.web3j.protocol.core.methods.response.EthGetTransactionReceipt;
+import org.web3j.protocol.core.methods.response.TransactionReceipt;
 import org.web3j.protocol.core.methods.request.Transaction;
 import org.web3j.protocol.core.methods.response.EthCall;
 import org.web3j.protocol.http.HttpService;
@@ -284,6 +287,37 @@ public class BlockchainService {
         }
     }
     
+    /**
+     * Get blockchain transaction details by transaction hash
+     */
+    public java.util.Map<String, Object> getTransactionDetails(String txHash) throws Exception {
+        EthTransaction txResponse = web3j.ethGetTransactionByHash(txHash).send();
+        if (txResponse == null || txResponse.getTransaction().isEmpty()) {
+            throw new Exception("Transaction not found: " + txHash);
+        }
+
+        org.web3j.protocol.core.methods.response.Transaction tx = txResponse.getTransaction().get();
+        java.util.Map<String, Object> result = new java.util.LinkedHashMap<>();
+        result.put("hash", tx.getHash());
+        result.put("from", tx.getFrom());
+        result.put("to", tx.getTo());
+        result.put("value", tx.getValue() != null ? tx.getValue().toString() : "0");
+        result.put("gas", tx.getGas() != null ? tx.getGas().toString() : "0");
+        result.put("input", tx.getInput());
+        result.put("nonce", tx.getNonce());
+        result.put("blockNumber", tx.getBlockNumberRaw());
+
+        EthGetTransactionReceipt receiptResponse = web3j.ethGetTransactionReceipt(txHash).send();
+        receiptResponse.getTransactionReceipt().ifPresent(receipt -> {
+            result.put("receiptStatus", receipt.getStatus());
+            result.put("gasUsed", receipt.getGasUsed() != null ? receipt.getGasUsed().toString() : null);
+            result.put("contractAddress", receipt.getContractAddress());
+            result.put("logs", receipt.getLogs());
+        });
+
+        return result;
+    }
+
     /**
      * Check if blockchain is connected and accessible
      */

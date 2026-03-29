@@ -5,7 +5,7 @@ import com.healthcare.medicalrecords.dto.DepartmentDto;
 import com.healthcare.medicalrecords.dto.DoctorDto;
 import com.healthcare.medicalrecords.dto.UserDto;
 import com.healthcare.medicalrecords.entity.*;
-import com.healthcare.medicalrecords.model.MedicalRecord;
+import com.healthcare.medicalrecords.entity.MedicalRecord;
 import com.healthcare.medicalrecords.service.AdminService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -17,12 +17,17 @@ import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
+import com.healthcare.medicalrecords.repository.NotificationRepository;
+
 @RestController
 @RequestMapping("/api/admin")
 public class AdminController {
 
     @Autowired
     private AdminService adminService;
+
+    @Autowired
+    private NotificationRepository notificationRepository;
 
     // ============ USER MANAGEMENT ============
 
@@ -214,7 +219,15 @@ public class AdminController {
     public ResponseEntity<List<MedicalRecord>> getPatientRecords(@PathVariable Long patientId) {
         return ResponseEntity.ok(adminService.getPatientRecords(patientId));
     }
+    @GetMapping("/medical-records")
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> listMedicalRecords() {
+        return ResponseEntity.ok(adminService.getAllMedicalRecords());
+    }
 
+    @GetMapping("/medical-records/{patientId}")
+    public ResponseEntity<java.util.List<java.util.Map<String, Object>>> getMedicalRecordsByPatient(@PathVariable Long patientId) {
+        return ResponseEntity.ok(adminService.getMedicalRecordsByPatient(patientId));
+    }
     // ============ AI PREDICTIONS MONITORING ============
 
     @GetMapping("/ai/logs")

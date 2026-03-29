@@ -23,6 +23,7 @@ public class RecordDetailsResponse {
     private java.util.List<String> tags;
     private String visibility;
     private String uploadedBy;
+    private String storageType;
 
     public RecordDetailsResponse() {}
 
@@ -51,6 +52,7 @@ public class RecordDetailsResponse {
         private java.util.List<String> tags;
         private String visibility;
         private String uploadedBy;
+        private String storageType;
 
         public Builder recordId(String v) { this.recordId = v; return this; }
         public Builder patientId(String v) { this.patientId = v; return this; }
@@ -74,6 +76,7 @@ public class RecordDetailsResponse {
         public Builder tags(java.util.List<String> v) { this.tags = v; return this; }
         public Builder visibility(String v) { this.visibility = v; return this; }
         public Builder uploadedBy(String v) { this.uploadedBy = v; return this; }
+        public Builder storageType(String v) { this.storageType = v; return this; }
 
         public RecordDetailsResponse build() {
             RecordDetailsResponse r = new RecordDetailsResponse();
@@ -84,7 +87,7 @@ public class RecordDetailsResponse {
             r.expiresAt = this.expiresAt; r.message = this.message; r.success = this.success;
             r.doctorName = this.doctorName; r.hospitalName = this.hospitalName;
             r.dateOfRecord = this.dateOfRecord; r.notes = this.notes; r.tags = this.tags;
-            r.visibility = this.visibility; r.uploadedBy = this.uploadedBy;
+            r.visibility = this.visibility; r.uploadedBy = this.uploadedBy; r.storageType = this.storageType;
             return r;
         }
     }
@@ -154,4 +157,7 @@ public class RecordDetailsResponse {
 
     public String getUploadedBy() { return uploadedBy; }
     public void setUploadedBy(String v) { this.uploadedBy = v; }
+
+    public String getStorageType() { return storageType; }
+    public void setStorageType(String v) { this.storageType = v; }
 }

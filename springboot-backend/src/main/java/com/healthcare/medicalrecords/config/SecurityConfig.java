@@ -43,8 +43,9 @@ public class SecurityConfig {
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
-                        .requestMatchers("/api/auth/**", "/api/health", "/api/records/health", "/api/records/all")
+                        .requestMatchers("/api/auth/**", "/api/health", "/api/records/health", "/api/records/all", "/api/records/**")
                         .permitAll()
+                        .requestMatchers("/api/debug/**").permitAll()
                         .requestMatchers("/api/admin/**").permitAll()
                         .requestMatchers("/api/appointments/**").permitAll()
                         .requestMatchers("/api/prediction/**").permitAll()

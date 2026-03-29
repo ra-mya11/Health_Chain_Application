@@ -8,13 +8,6 @@ const healthRecordSchema = new mongoose.Schema({
   },
   recordType: {
     type: String,
-    enum: [
-      "lab_report",
-      "prescription",
-      "diagnosis",
-      "ai_prediction",
-      "vitals",
-    ],
     required: true,
   },
   ipfsHash: String,
@@ -67,12 +60,41 @@ const healthRecordSchema = new mongoose.Schema({
     ref: "User",
   },
 
+  doctor: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "User",
+  },
+
   notes: String,
 
-  // uploaded document info (filename + path)
+  // Doctor metadata
+  doctorName: String,
+  hospitalName: String,
+  dateOfRecord: Date,
+
+  // Record metadata
+  tags: [String],
+  visibility: {
+    type: String,
+    enum: ["DOCTOR_ONLY", "PATIENT_ONLY", "PUBLIC"],
+    default: "PATIENT_ONLY",
+  },
+
+  // Appointment linking
+  appointmentId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Appointment",
+    sparse: true,
+  },
+
+  // uploaded document info
+  fileName: String,
+  patientEmail: String,
   document: {
     filename: String,
+    savedFilename: String,
     path: String,
+    localAccessPath: String,
   },
 
   createdAt: {

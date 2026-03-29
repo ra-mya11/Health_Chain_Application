@@ -124,4 +124,30 @@ router.patch("/wallet", auth, async (req, res) => {
   }
 });
 
+// Get all users (internal use by Spring Boot admin)
+router.get("/all-users", async (req, res) => {
+  try {
+    const users = await User.find().select("name email role phone createdAt");
+    res.json(users.map(u => ({
+      name: u.name, email: u.email,
+      role: u.role, phone: u.phone,
+      createdAt: u.createdAt
+    })));
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get user by email (internal use by Spring Boot for MySQL sync)
+router.get("/user-by-email", async (req, res) => {
+  try {
+    const { email } = req.query;
+    const user = await User.findOne({ email: email?.toLowerCase() }).select("name email role password phone");
+    if (!user) return res.status(404).json({ error: "User not found" });
+    res.json({ name: user.name, email: user.email, role: user.role, password: user.password, phone: user.phone });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 module.exports = router;

@@ -100,9 +100,18 @@ public class AppointmentService {
         return buildAppointmentResponse(appointmentRepository.save(apt));
     }
 
-    public List<Map<String, Object>> getPatientAppointments(Long patientId) {
-        return appointmentRepository.findByPatientId(patientId)
-                .stream().map(this::buildAppointmentResponse).collect(Collectors.toList());
+    public List<Map<String, Object>> getPatientAppointments(Long patientId, String patientEmail) {
+        List<Appointment> results;
+        if (patientId != null && patientEmail != null) {
+            results = appointmentRepository.findByPatientIdOrPatientEmail(patientId, patientEmail);
+        } else if (patientId != null) {
+            results = appointmentRepository.findByPatientId(patientId);
+        } else if (patientEmail != null) {
+            results = appointmentRepository.findByPatientEmail(patientEmail);
+        } else {
+            return List.of();
+        }
+        return results.stream().map(this::buildAppointmentResponse).collect(Collectors.toList());
     }
 
     public List<Map<String, Object>> getDoctorAppointments(Long doctorId) {
@@ -134,11 +143,25 @@ public class AppointmentService {
         return buildAppointmentResponse(appointmentRepository.save(apt));
     }
 
-    public void cancelAppointment(Long appointmentId, Long patientId) {
+    public void cancelAppointment(Long appointmentId) {
         Appointment apt = appointmentRepository.findById(appointmentId)
                 .orElseThrow(() -> new RuntimeException("Appointment not found"));
-        if (!apt.getPatientId().equals(patientId))
+        apt.setStatus("CANCELLED");
+        appointmentRepository.save(apt);
+    }
+
+    public void cancelAppointment(Long appointmentId, Long patientId, Long doctorId) {
+        Appointment apt = appointmentRepository.findById(appointmentId)
+                .orElseThrow(() -> new RuntimeException("Appointment not found"));
+        
+        // Allow cancellation if either patient or doctor is deleting
+        boolean isPatient = patientId != null && apt.getPatientId().equals(patientId);
+        boolean isDoctor = doctorId != null && apt.getDoctorId().equals(doctorId);
+        
+        if (!isPatient && !isDoctor) {
             throw new RuntimeException("Not authorized");
+        }
+        
         apt.setStatus("CANCELLED");
         appointmentRepository.save(apt);
     }

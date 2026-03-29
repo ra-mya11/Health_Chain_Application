@@ -1,6 +1,6 @@
 package com.healthcare.medicalrecords.controller;
 
-import com.healthcare.medicalrecords.model.Assessment;
+import com.healthcare.medicalrecords.entity.Assessment;
 import com.healthcare.medicalrecords.repository.AssessmentRepository;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -21,12 +21,10 @@ public class AssessmentController {
     }
 
     @PostMapping("/save")
-    public ResponseEntity<Assessment> saveAssessment(
-            @RequestBody Map<String, Object> body, Authentication auth) {
+    public ResponseEntity<Assessment> saveAssessment(@RequestBody Map<String, Object> body, Authentication auth) {
         Assessment a = new Assessment();
-        a.setUserId(auth.getName());
+        try { a.setUserId(Long.parseLong(auth.getName())); } catch (Exception ignored) {}
         a.setTimestamp(LocalDateTime.now());
-
         if (body.get("Age") != null) a.setAge(((Number) body.get("Age")).intValue());
         if (body.get("BMI") != null) a.setBmi(((Number) body.get("BMI")).doubleValue());
         if (body.get("BloodPressure") != null) a.setBloodPressure(((Number) body.get("BloodPressure")).doubleValue());
@@ -35,15 +33,18 @@ public class AssessmentController {
         if (body.get("Sex") != null) a.setSex(((Number) body.get("Sex")).intValue());
         if (body.get("risk_level") != null) a.setRiskLevel(body.get("risk_level").toString());
         if (body.get("source") != null) a.setSource(body.get("source").toString());
-
         return ResponseEntity.ok(assessmentRepository.save(a));
     }
 
     @GetMapping("/latest")
     public ResponseEntity<?> getLatest(Authentication auth) {
-        return assessmentRepository
-                .findTopByUserIdOrderByTimestampDesc(auth.getName())
-                .map(ResponseEntity::ok)
-                .orElse(ResponseEntity.notFound().build());
+        try {
+            Long userId = Long.parseLong(auth.getName());
+            return assessmentRepository.findTopByUserIdOrderByTimestampDesc(userId)
+                    .map(ResponseEntity::ok)
+                    .orElse(ResponseEntity.notFound().build());
+        } catch (Exception e) {
+            return ResponseEntity.notFound().build();
+        }
     }
 }

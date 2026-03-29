@@ -1,7 +1,8 @@
-import React, { useState, useEffect, useRef, useCallback } from "react";
+﻿import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { getDoctorAppointments } from "../services/api";
+import { getDoctorAppointments, updateAppointmentStatus, clearAppointment } from "../services/api";
 import { removeToken } from "../utils/auth";
+import { fetchNotificationsForRole } from "../services/adminApi";
 
 const RECORD_TYPES = [
   "Lab Report", "Prescription", "Scan / X-Ray", "MRI Report",
@@ -30,9 +31,9 @@ const RECORD_TYPE_ICONS = {
 };
 
 const emptyUpload = {
-  patientId: "", patientName: "", recordType: "", doctorName: "",
+  patientId: "", patientName: "", patientEmail: "", recordType: "", doctorName: "",
   hospitalName: "", dateOfRecord: "", notes: "", tags: [],
-  tagInput: "", visibility: "DOCTOR_ONLY", files: [],
+  tagInput: "", visibility: "PATIENT_ONLY", files: [], appointmentId: "",
 };
 
 function DoctorDashboard({ setAuth }) {
@@ -42,12 +43,15 @@ function DoctorDashboard({ setAuth }) {
   const [user, setUser] = useState(null);
   const [uploadData, setUploadData] = useState(emptyUpload);
   const [patientSuggestions, setPatientSuggestions] = useState([]);
+  const [patientSearchFocused, setPatientSearchFocused] = useState(false);
   const [dragOver, setDragOver] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadStatus, setUploadStatus] = useState(null); // { type: 'success'|'error', msg }
   const [filePreviews, setFilePreviews] = useState([]);
   const [recordsLoading, setRecordsLoading] = useState(false);
+  const [appointmentSource, setAppointmentSource] = useState(null);
+  const [notifications, setNotifications] = useState([]);
   const fileInputRef = useRef(null);
 
   const navigate = useNavigate();
@@ -58,6 +62,9 @@ function DoctorDashboard({ setAuth }) {
       const u = JSON.parse(userData);
       setUser(u);
       setUploadData((prev) => ({ ...prev, doctorName: u.name || "" }));
+      fetchNotificationsForRole(u.role || "doctor")
+        .then(res => setNotifications(res.data))
+        .catch(() => {});
     }
     fetchAppointments();
   }, []);
@@ -74,10 +81,7 @@ function DoctorDashboard({ setAuth }) {
   const viewPatientRecords = async (patientId) => {
     try {
       setRecordsLoading(true);
-      const token = localStorage.getItem("healthcare_token");
-      const res = await fetch(`/api/records/patient/${patientId}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`http://localhost:8081/api/records/patient/${patientId}`);
       const data = await res.json();
       setPatientRecords(data.records || []);
       setActiveTab("records");
@@ -95,37 +99,58 @@ function DoctorDashboard({ setAuth }) {
     navigate("/login");
   };
 
-  const updateAppointmentStatus = async (appointmentId, status, notes) => {
+  const handleUpdateAppointmentStatus = async (appointmentId, status, notes) => {
     try {
-      await fetch(`/api/appointments/${appointmentId}/status`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("healthcare_token")}`,
-        },
-        body: JSON.stringify({ status, notes }),
-      });
+      await updateAppointmentStatus(appointmentId, status, notes);
       fetchAppointments();
     } catch (error) {
-      console.error("Failed to update appointment");
+      console.error("Failed to update appointment", error);
+      alert("❌ Unable to update appointment status. Please log in again or refresh the page.");
+    }
+  };
+
+  const handleClearAppointment = async (appointmentId) => {
+    if (!window.confirm("Are you sure you want to remove this appointment from your list?")) return;
+    try {
+      await clearAppointment(appointmentId);
+      fetchAppointments();
+      alert("✅ Appointment cleared successfully");
+    } catch (error) {
+      console.error("Failed to clear appointment", error);
+      alert("❌ Unable to clear appointment. Please log in again or refresh the page.");
     }
   };
 
   // Patient auto-suggest from appointments list
   const handlePatientSearch = (val) => {
     setUploadData((prev) => ({ ...prev, patientId: val, patientName: val }));
-    if (!val.trim()) { setPatientSuggestions([]); return; }
+    
+    // Get all unique patients from appointments
+    const allPatients = appointments
+      .map((a) => ({ id: a.patient?.id, name: a.patient?.name, email: a.patient?.email }))
+      .filter((v, i, arr) => arr.findIndex((x) => x.id === v.id) === i)
+      .filter(p => p.id && p.name);
+    
+    if (!val.trim()) {
+      // Show all patients when input is empty and focused
+      setPatientSuggestions(patientSearchFocused ? allPatients : []);
+      return;
+    }
+    
+    // Filter as they type - safely convert to string
     const q = val.toLowerCase();
-    const matches = appointments
-      .filter((a) => a.patient?.name?.toLowerCase().includes(q) || a.patient?.id?.toLowerCase().includes(q))
-      .map((a) => ({ id: a.patient?.id, name: a.patient?.name }))
-      .filter((v, i, arr) => arr.findIndex((x) => x.id === v.id) === i);
+    const matches = allPatients.filter((p) => {
+      const nameMatch = (p.name || "").toLowerCase().includes(q);
+      const idMatch = String(p.id || "").toLowerCase().includes(q);
+      return nameMatch || idMatch;
+    });
     setPatientSuggestions(matches);
   };
 
   const selectPatient = (p) => {
-    setUploadData((prev) => ({ ...prev, patientId: p.id, patientName: p.name }));
+    setUploadData((prev) => ({ ...prev, patientId: p.id, patientName: p.name, patientEmail: p.email || "" }));
     setPatientSuggestions([]);
+    setPatientSearchFocused(false);
   };
 
   // File handling
@@ -179,11 +204,17 @@ function DoctorDashboard({ setAuth }) {
 
     setUploading(true); setUploadProgress(0); setUploadStatus(null);
 
+    const totalFiles = uploadData.files.length;
+    let ipfsCount = 0;
+    let localCount = 0;
+
     // Upload files one by one
+    /* eslint-disable no-loop-func */
     for (let i = 0; i < uploadData.files.length; i++) {
       const form = new FormData();
       form.append("file", uploadData.files[i]);
       form.append("patientId", uploadData.patientId);
+      form.append("patientEmail", uploadData.patientEmail || "");
       form.append("doctorId", doctorId);
       form.append("recordType", uploadData.recordType);
       form.append("doctorName", uploadData.doctorName);
@@ -193,10 +224,11 @@ function DoctorDashboard({ setAuth }) {
       form.append("tags", uploadData.tags.join(","));
       form.append("visibility", uploadData.visibility);
       form.append("uploadedBy", doctorId);
+      if (uploadData.appointmentId) form.append("appointmentId", uploadData.appointmentId);
 
       await new Promise((resolve, reject) => {
         const xhr = new XMLHttpRequest();
-        xhr.open("POST", "/api/records/upload");
+        xhr.open("POST", "http://localhost:8081/api/records/upload");
         xhr.setRequestHeader("Authorization", `Bearer ${token}`);
         xhr.upload.onprogress = (ev) => {
           if (ev.lengthComputable) {
@@ -205,8 +237,14 @@ function DoctorDashboard({ setAuth }) {
           }
         };
         xhr.onload = () => {
-          if (xhr.status >= 200 && xhr.status < 300) resolve();
-          else reject(new Error(xhr.responseText));
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const resp = JSON.parse(xhr.responseText);
+              if (resp.record?.storageMethod === "ipfs") ipfsCount++;
+              else localCount++;
+            } catch (e) { localCount++; }
+            resolve();
+          } else reject(new Error(xhr.responseText));
         };
         xhr.onerror = () => reject(new Error("Network error"));
         xhr.send(form);
@@ -215,30 +253,33 @@ function DoctorDashboard({ setAuth }) {
       });
     }
 
+    /* eslint-enable no-loop-func */
     setUploading(false); setUploadProgress(100);
-    setUploadStatus({ type: "success", msg: `${uploadData.files.length} file(s) uploaded successfully to IPFS!` });
+    const storageNote = ipfsCount > 0 && localCount === 0
+      ? `⛓️ Stored on IPFS`
+      : ipfsCount > 0
+      ? `⛓️ ${ipfsCount} on IPFS, 💾 ${localCount} local`
+      : `💾 Stored locally (IPFS unavailable)`;
+    setUploadStatus({
+      type: "success",
+      msg: `✅ ${totalFiles} file(s) uploaded & visible in patient portal. ${storageNote}`,
+    });
     setUploadData({ ...emptyUpload, doctorName: user?.name || "" });
+    setAppointmentSource(null);
     setFilePreviews([]);
   };
 
   const deleteRecord = async (recordId) => {
     if (!window.confirm("Delete this record?")) return;
     try {
-      const token = localStorage.getItem("healthcare_token");
-      await fetch(`/api/records/${recordId}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      await fetch(`http://localhost:8081/api/records/${recordId}`, { method: "DELETE" });
       setPatientRecords((prev) => prev.filter((r) => (r.recordId || r.id) !== recordId));
     } catch { alert("Delete failed."); }
   };
 
   const downloadRecord = async (ipfsHash, fileName) => {
     try {
-      const token = localStorage.getItem("healthcare_token");
-      const res = await fetch(`/api/records/download/${ipfsHash}`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+      const res = await fetch(`http://localhost:8081/api/records/download/${ipfsHash}`);
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -270,7 +311,7 @@ function DoctorDashboard({ setAuth }) {
       <div className="bg-white border-b">
         <div className="max-w-7xl mx-auto px-4">
           <div className="flex gap-2">
-            {["appointments", "records", "upload", "schedule"].map((tab) => (
+            {["appointments", "records", "upload", "schedule", "notifications"].map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
@@ -281,6 +322,7 @@ function DoctorDashboard({ setAuth }) {
                 {tab === "appointments" ? "📅 My Appointments"
                   : tab === "records" ? "📋 Patient Records"
                   : tab === "upload" ? "📤 Upload Record"
+                  : tab === "notifications" ? `🔔 Notifications${notifications.length > 0 ? ` (${notifications.length})` : ""}`
                   : "🕐 My Schedule"}
               </button>
             ))}
@@ -344,30 +386,65 @@ function DoctorDashboard({ setAuth }) {
                       </div>
 
                       <div className="flex flex-col gap-2 ml-4">
-                        <button
-                          onClick={() => viewPatientRecords(apt.patient?.id)}
-                          className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition text-sm"
-                        >
-                          View Records
-                        </button>
+                        {apt.status === "SCHEDULED" ? (
+                          <button
+                            onClick={() => {
+                              const patientEmail = apt.patient?.email || "";
+                              const patientName = apt.patient?.name || "";
+                              const patientId = apt.patient?.id || "";
+                              if (!patientEmail && !patientId) {
+                                alert("Error: Patient info not found."); return;
+                              }
+                              setUploadData((prev) => ({
+                                ...prev,
+                                patientId: String(patientId),
+                                patientName: patientName,
+                                patientEmail: patientEmail,
+                                appointmentId: apt.id
+                              }));
+                              setAppointmentSource(apt.id); // Track that this came from appointment
+                              setActiveTab("upload");
+                            }}
+                            className="bg-purple-600 text-white px-4 py-2 rounded hover:bg-purple-700 transition text-sm"
+                          >
+                            📤 Upload Records
+                          </button>
+                        ) : apt.status === "COMPLETED" ? (
+                          <button
+                            onClick={() => viewPatientRecords(apt.patient?.id)}
+                            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition text-sm"
+                          >
+                            👁️ View Records
+                          </button>
+                        ) : null}
+                        
                         {apt.status === "SCHEDULED" && (
                           <>
                             <button
                               onClick={() => {
                                 const notes = prompt("Enter consultation notes:");
-                                if (notes) updateAppointmentStatus(apt.id, "completed", notes);
+                                if (notes) handleUpdateAppointmentStatus(apt.id, "completed", notes);
                               }}
                               className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 transition text-sm"
                             >
                               Complete
                             </button>
                             <button
-                              onClick={() => updateAppointmentStatus(apt.id, "cancelled")}
+                              onClick={() => handleUpdateAppointmentStatus(apt.id, "cancelled")}
                               className="bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 transition text-sm"
                             >
                               Cancel
                             </button>
                           </>
+                        )}
+
+                        {(apt.status === "COMPLETED" || apt.status === "CANCELLED") && (
+                          <button
+                            onClick={() => handleClearAppointment(apt.id)}
+                            className="bg-gray-500 text-white px-4 py-2 rounded hover:bg-gray-600 transition text-sm"
+                          >
+                            🗑️ Clear
+                          </button>
                         )}
                       </div>
                     </div>
@@ -404,10 +481,7 @@ function DoctorDashboard({ setAuth }) {
                   onClick={async () => {
                     try {
                       setRecordsLoading(true);
-                      const token = localStorage.getItem("healthcare_token");
-                      const res = await fetch("/api/records/all", {
-                        headers: { Authorization: `Bearer ${token}` },
-                      });
+                      const res = await fetch("http://localhost:8081/api/records/all");
                       const data = await res.json();
                       setPatientRecords(Array.isArray(data) ? data : []);
                     } catch { setPatientRecords([]); }
@@ -535,33 +609,60 @@ function DoctorDashboard({ setAuth }) {
 
                 {/* Patient Search */}
                 <div className="bg-white rounded-xl shadow-sm border p-5">
-                  <h3 className="font-semibold text-gray-700 mb-3">👤 Patient</h3>
+                  <div className="flex items-center gap-2 mb-3">
+                    <h3 className="font-semibold text-gray-700">👤 Patient</h3>
+                    {appointmentSource && (
+                      <span className="bg-green-100 text-green-700 text-xs px-2 py-1 rounded-full flex items-center gap-1">
+                        <span>✅</span>
+                        <span>From Appointment</span>
+                      </span>
+                    )}
+                  </div>
                   <div className="relative">
                     <input
                       type="text"
                       value={uploadData.patientName || uploadData.patientId}
-                      onChange={(e) => handlePatientSearch(e.target.value)}
-                      placeholder="Search by name or ID..."
-                      className="w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      onChange={(e) => !appointmentSource && handlePatientSearch(e.target.value)}
+                      onFocus={() => {
+                        if (!appointmentSource) {
+                          setPatientSearchFocused(true);
+                          handlePatientSearch(uploadData.patientId || uploadData.patientName || "");
+                        }
+                      }}
+                      onBlur={() => {
+                        setPatientSearchFocused(false);
+                        setTimeout(() => setPatientSuggestions([]), 200);
+                      }}
+                      placeholder={appointmentSource ? "Patient selected from appointment" : "Search by name or ID... (click to see all)"}
+                      className={`w-full px-4 py-2.5 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-400 ${
+                        appointmentSource ? "bg-gray-50 cursor-not-allowed" : ""
+                      }`}
+                      readOnly={!!appointmentSource}
                       required
                     />
-                    {patientSuggestions.length > 0 && (
-                      <ul className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-48 overflow-y-auto">
+                    {!appointmentSource && patientSuggestions.length > 0 && (
+                      <ul className="absolute z-10 w-full bg-white border rounded-lg shadow-lg mt-1 max-h-64 overflow-y-auto">
                         {patientSuggestions.map((p) => (
                           <li
                             key={p.id}
                             onClick={() => selectPatient(p)}
-                            className="px-4 py-2.5 hover:bg-blue-50 cursor-pointer flex justify-between items-center"
+                            className="px-4 py-3 hover:bg-blue-50 cursor-pointer flex justify-between items-center border-b last:border-b-0"
                           >
-                            <span className="font-medium">{p.name}</span>
-                            <span className="text-xs text-gray-400">{p.id}</span>
+                            <div>
+                              <div className="font-medium text-gray-800">{p.name}</div>
+                              <div className="text-xs text-gray-500">IPFS ID: {p.id}</div>
+                            </div>
+                            <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded">Select</span>
                           </li>
                         ))}
                       </ul>
                     )}
                   </div>
                   {uploadData.patientId && uploadData.patientName && uploadData.patientName !== uploadData.patientId && (
-                    <p className="text-xs text-green-600 mt-1">✓ Selected: {uploadData.patientName} ({uploadData.patientId})</p>
+                    <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+                      <span>✓</span>
+                      <span>Selected: <strong>{uploadData.patientName}</strong> — IPFS ID: {uploadData.patientId}</span>
+                    </p>
                   )}
                 </div>
 
@@ -774,6 +875,32 @@ function DoctorDashboard({ setAuth }) {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {activeTab === "notifications" && (
+          <div className="space-y-4">
+            <h2 className="text-2xl font-bold text-gray-800">🔔 Notifications</h2>
+            {notifications.length === 0 ? (
+              <div className="bg-white rounded-xl shadow p-12 text-center text-gray-500">No notifications</div>
+            ) : (
+              notifications.map(n => (
+                <div key={n.id} className="bg-white rounded-xl shadow p-5 border-l-4 border-blue-500">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <h3 className="font-bold text-gray-800">{n.title}</h3>
+                      <p className="text-gray-600 mt-1">{n.message}</p>
+                    </div>
+                    <span className="text-xs text-gray-400 whitespace-nowrap ml-4">
+                      {n.sentAt ? new Date(n.sentAt).toLocaleDateString() : ""}
+                    </span>
+                  </div>
+                  <span className="mt-2 inline-block px-2 py-1 text-xs bg-blue-100 text-blue-700 rounded">
+                    {n.targetRole === "ALL" ? "All Users" : n.targetRole}
+                  </span>
+                </div>
+              ))
+            )}
           </div>
         )}
 

@@ -2,6 +2,8 @@ package com.healthcare.medicalrecords.controller;
 
 import com.healthcare.medicalrecords.dto.*;
 import com.healthcare.medicalrecords.service.MedicalRecordService;
+import com.healthcare.medicalrecords.service.IPFSService;
+import com.healthcare.medicalrecords.service.BlockchainService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.format.annotation.DateTimeFormat;
@@ -27,9 +29,13 @@ public class MedicalRecordController {
     private static final Logger log = LoggerFactory.getLogger(MedicalRecordController.class);
 
     private final MedicalRecordService service;
+    private final IPFSService ipfsService;
+    private final BlockchainService blockchainService;
 
-    public MedicalRecordController(MedicalRecordService service) {
+    public MedicalRecordController(MedicalRecordService service, IPFSService ipfsService, BlockchainService blockchainService) {
         this.service = service;
+        this.ipfsService = ipfsService;
+        this.blockchainService = blockchainService;
     }
     
     /**
@@ -51,7 +57,7 @@ public class MedicalRecordController {
             @RequestParam(value = "dateOfRecord", required = false) String dateOfRecord,
             @RequestParam(value = "notes", required = false) String notes,
             @RequestParam(value = "tags", required = false) String tags,
-            @RequestParam(value = "visibility", defaultValue = "DOCTOR_ONLY") String visibility,
+            @RequestParam(value = "visibility", defaultValue = "PATIENT_ONLY") String visibility,
             @RequestParam(value = "uploadedBy", required = false) String uploadedBy) {
         
         log.info("Uploading record for patient: {}", patientId);
@@ -97,21 +103,48 @@ public class MedicalRecordController {
         PatientRecordsResponse response = service.getRecordsByDoctorId(doctorId);
         return ResponseEntity.ok(response);
     }
-    
+
+    @GetMapping("/ipfs/{cid}")
+    public ResponseEntity<byte[]> fetchFileFromIpfs(@PathVariable String cid) {
+        try {
+            log.info("Fetching IPFS file for CID: {}", cid);
+            byte[] data = ipfsService.downloadFile(cid);
+            return ResponseEntity.ok()
+                    .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + cid + "\"")
+                    .contentType(MediaType.APPLICATION_OCTET_STREAM)
+                    .body(data);
+        } catch (Exception e) {
+            log.error("Failed to fetch IPFS file {}", cid, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/blockchain/tx/{txHash}")
+    public ResponseEntity<java.util.Map<String, Object>> getBlockchainTransaction(@PathVariable String txHash) {
+        try {
+            log.info("Fetching blockchain transaction for hash: {}", txHash);
+            java.util.Map<String, Object> txInfo = blockchainService.getTransactionDetails(txHash);
+            return ResponseEntity.ok(txInfo);
+        } catch (Exception e) {
+            log.error("Failed to fetch transaction {}", txHash, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(java.util.Map.of("error", e.getMessage()));
+        }
+    }
+
     /**
-     * Get a specific record by record ID
+     * Get a specific record by ID
      * @param recordId Record identifier
      * @return Record details
      */
     @GetMapping("/{recordId}")
     public ResponseEntity<RecordDetailsResponse> getRecordById(
             @PathVariable String recordId) {
-        
+
         log.info("Retrieving record: {}", recordId);
         RecordDetailsResponse record = service.getRecordById(recordId);
-        
-        return record != null && record.isSuccess() ? 
-            ResponseEntity.ok(record) : 
+
+        return record != null && record.isSuccess() ?
+            ResponseEntity.ok(record) :
             ResponseEntity.notFound().build();
     }
     
@@ -154,22 +187,28 @@ public class MedicalRecordController {
      * @param ipfsHash IPFS hash of the file
      * @return File content for download
      */
-    @GetMapping("/download/{ipfsHash}")
-    public ResponseEntity<byte[]> downloadRecord(@PathVariable String ipfsHash) {
+    @GetMapping("/download/{hash}")
+    public ResponseEntity<byte[]> downloadRecord(
+            @PathVariable String hash,
+            @RequestParam(required = false) String fileName) {
         try {
-            log.info("Downloading record from IPFS: {}", ipfsHash);
-            byte[] fileData = service.downloadRecord(ipfsHash);
-            
+            log.info("Downloading record: {}", hash);
+            byte[] fileData = service.downloadRecord(hash);
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
-            headers.setContentDispositionFormData("attachment", "medical-record");
-            
-            return ResponseEntity.ok()
-                .headers(headers)
-                .body(fileData);
-                
+
+            // Detect content type from file extension
+            String name = fileName != null ? fileName : "medical-record";
+            MediaType mediaType = MediaType.APPLICATION_OCTET_STREAM;
+            if (name.endsWith(".pdf")) mediaType = MediaType.APPLICATION_PDF;
+            else if (name.endsWith(".jpg") || name.endsWith(".jpeg")) mediaType = MediaType.IMAGE_JPEG;
+            else if (name.endsWith(".png")) mediaType = MediaType.IMAGE_PNG;
+
+            headers.setContentType(mediaType);
+            headers.setContentDispositionFormData("inline", name);
+            headers.setContentLength(fileData.length);
+            return ResponseEntity.ok().headers(headers).body(fileData);
         } catch (Exception e) {
-            log.error("Error downloading record: {}", ipfsHash, e);
+            log.error("Error downloading record: {}", hash, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

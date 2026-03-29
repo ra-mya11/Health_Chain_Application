@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from "react";
-import axios from "axios";
 
 const SymptomChecker = () => {
   const [step, setStep] = useState(1); // 1: Input, 2: Results, 3: Doctor Selection
@@ -113,9 +112,24 @@ const SymptomChecker = () => {
       } catch {}
 
       setPrediction(result);
-      setDoctors([]);
       setStep(2);
       setLoading(false);
+
+      // Fetch doctors for the recommended department
+      fetch(`http://localhost:8081/api/appointments/doctors/available`)
+        .then(r => r.json())
+        .then(allDoctors => {
+          // Match by departmentName or specialization (case-insensitive, partial match)
+          const matched = allDoctors.filter(d => {
+            const deptName = (d.departmentName || "").toLowerCase();
+            const spec = (d.specialization || "").toLowerCase();
+            const rec = dept.toLowerCase();
+            return deptName.includes(rec) || rec.includes(deptName) ||
+                   spec.includes(rec) || rec.includes(spec);
+          });
+          setDoctors(matched.length > 0 ? matched : allDoctors);
+        })
+        .catch(() => setDoctors([]));
     }, 800);
   };
 
@@ -147,36 +161,31 @@ const SymptomChecker = () => {
       setError("Please select a doctor, date, and time slot");
       return;
     }
-
     setLoading(true);
     setError("");
-
     try {
-      const response = await axios.post(
-        "/api/prediction/book-appointment",
-        {
-          doctorId: selectedDoctor.id,
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      const patientId = user.mysqlId || user.userId;
+      const response = await fetch("http://localhost:8081/api/appointments/book", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          doctorId: String(selectedDoctor.userId),
           date: appointmentDate,
           timeSlot,
-          reasonForVisit: `Based on symptom prediction: ${prediction.predicted_disease}`,
-        },
-        {
-          headers: {
-            Authorization: `Bearer ${localStorage.getItem("token")}`,
-          },
-        },
-      );
-
-      alert("Appointment booked successfully!");
-      // Reset form
+          department: selectedDoctor.departmentName || selectedDoctor.specialization,
+          reason: `Based on symptom assessment: ${prediction.predicted_disease}`,
+          patientId: patientId ? String(patientId) : null,
+          patientEmail: user.email,
+        }),
+      });
+      if (!response.ok) throw new Error("Booking failed");
+      alert("✅ Appointment booked successfully!");
       setStep(1);
-      setAge("");
-      setGender("male");
-      setSymptoms({});
-      setPrediction(null);
-      setSelectedDoctor(null);
+      setAge(""); setGender("male"); setSymptoms({});
+      setPrediction(null); setSelectedDoctor(null);
     } catch (err) {
-      setError(err.response?.data?.error || "Failed to book appointment");
+      setError(err.message || "Failed to book appointment");
     } finally {
       setLoading(false);
     }
@@ -386,10 +395,10 @@ const SymptomChecker = () => {
                 <div className="space-y-4 mb-6">
                   {doctors.map((doctor) => (
                     <div
-                      key={doctor.id}
+                      key={doctor.userId || doctor.id}
                       onClick={() => setSelectedDoctor(doctor)}
                       className={`p-4 rounded-lg border-2 cursor-pointer transition ${
-                        selectedDoctor?.id === doctor.id
+                        selectedDoctor?.userId === doctor.userId
                           ? "border-blue-500 bg-blue-50"
                           : "border-gray-300 hover:border-blue-300"
                       }`}
@@ -397,28 +406,32 @@ const SymptomChecker = () => {
                       <div className="flex justify-between items-start">
                         <div>
                           <h3 className="font-bold text-lg text-gray-800">
-                            {doctor.name}
+                            Dr. {doctor.name}
                           </h3>
                           <p className="text-sm text-gray-600">
                             {doctor.specialization}
                           </p>
-                          <p className="text-xs text-gray-500 mt-1">
-                            License: {doctor.licenseNumber}
-                          </p>
+                          {doctor.departmentName && (
+                            <p className="text-xs text-gray-500 mt-1">🏥 {doctor.departmentName}</p>
+                          )}
+                          {doctor.experienceYears && (
+                            <p className="text-xs text-gray-500">🎓 {doctor.experienceYears} yrs experience</p>
+                          )}
                         </div>
                         <div className="text-right">
                           <div className="bg-green-100 text-green-800 px-3 py-1 rounded-full text-sm font-semibold">
-                            {doctor.available_slots} Slots
+                            ✅ Available
                           </div>
+                          {doctor.consultationFee && (
+                            <p className="text-xs text-gray-500 mt-1">₹{doctor.consultationFee}</p>
+                          )}
                         </div>
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="text-gray-600 mb-6">
-                  No specialists found for this department
-                </p>
+                <p className="text-gray-500 mb-6 italic">No specialists found for this department.</p>
               )}
 
               {selectedDoctor && (

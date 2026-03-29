@@ -7,7 +7,7 @@ import AppointmentMonitoring from "../components/admin/AppointmentMonitoring";
 import NotificationManagement from "../components/admin/NotificationManagement";
 import DoctorManagement from "../components/admin/DoctorManagement";
 import MedicalRecordsMonitoring from "../components/admin/MedicalRecordsMonitoring";
-import AIPredictionLogs from "../components/admin/AIPredictionLogs";
+
 import {
   fetchAnalytics,
   fetchAllAppointments,
@@ -294,7 +294,6 @@ function AdminDashboard({ setAuth }) {
               ["departments", "🏥 Departments"],
               ["appointments", "📅 Appointments"],
               ["records", "📋 Records"],
-              ["ai", "🤖 AI Logs"],
               ["notifications", "🔔 Notifications"],
             ].map(([key, label]) => (
               <button
@@ -547,7 +546,6 @@ function AdminDashboard({ setAuth }) {
         {activeTab === "departments" && <DepartmentManagement />}
         {activeTab === "appointments" && <AppointmentMonitoring />}
         {activeTab === "records" && <MedicalRecordsMonitoring />}
-        {activeTab === "ai" && <AIPredictionLogs />}
         {activeTab === "notifications" && <NotificationManagement />}
       </main>
     </div>

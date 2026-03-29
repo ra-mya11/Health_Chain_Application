@@ -26,13 +26,15 @@ function Login({ setAuth, setRole }) {
         : await register(formData);
 
       setToken(response.token);
-      const role = (response.user?.role || response.role || "").toLowerCase();
+      const role = (response.role || "").toLowerCase();
       const user = {
-        userId: response.user?.id || response.userId,
-        email: response.user?.email || response.email,
-        name: response.user?.name || response.name,
+        userId: response.userId,
+        email: response.email,
+        name: response.name,
         role,
+        mysqlId: response.userId,  // already MySQL numeric ID from Spring Boot
       };
+
       localStorage.setItem("user", JSON.stringify(user));
       setAuth(true);
       setRole(role);

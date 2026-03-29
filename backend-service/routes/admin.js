@@ -152,7 +152,39 @@ router.get("/records", auth, authorize("admin"), async (req, res) => {
       .populate('patient', 'name email')
       .populate('doctor', 'name email specialization')
       .sort({ createdAt: -1 });
-    res.json(records);
+
+    // Manually populate if populate didn't work
+    const populatedRecords = await Promise.all(records.map(async (record) => {
+      const recordObj = record.toObject();
+
+      // If patient is not populated, try to find by ID
+      if (!recordObj.patient && record.patient) {
+        try {
+          const patient = await User.findById(record.patient);
+          if (patient) {
+            recordObj.patient = { _id: patient._id, name: patient.name, email: patient.email };
+          }
+        } catch (err) {
+          console.log('Patient populate error:', err);
+        }
+      }
+
+      // If doctor is not populated, try to find by ID
+      if (!recordObj.doctor && record.doctor) {
+        try {
+          const doctor = await User.findById(record.doctor);
+          if (doctor) {
+            recordObj.doctor = { _id: doctor._id, name: doctor.name, email: doctor.email, specialization: doctor.specialization };
+          }
+        } catch (err) {
+          console.log('Doctor populate error:', err);
+        }
+      }
+
+      return recordObj;
+    }));
+
+    res.json(populatedRecords);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }

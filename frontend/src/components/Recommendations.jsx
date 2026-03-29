@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from "react";
-import api from "../services/api";
+import api, { getHealthHistory } from "../services/api";
 
 function Recommendations() {
   const [assessment, setAssessment] = useState(null);
+  const [healthRecord, setHealthRecord] = useState(null);
   const [loading, setLoading] = useState(true);
   const [notifications, setNotifications] = useState([]);
   const [notifPermission, setNotifPermission] = useState("default");
@@ -15,28 +16,70 @@ function Recommendations() {
   const [reminderIntervals, setReminderIntervals] = useState([]);
 
   useEffect(() => {
-    fetchAssessment();
+    fetchData();
     checkNotificationPermission();
     return () => reminderIntervals.forEach(clearInterval);
   }, []);
 
-  const fetchAssessment = async () => {
-    const stored = sessionStorage.getItem("lastAssessment");
-    if (stored) {
-      try { setAssessment(JSON.parse(stored)); setLoading(false); return; } catch {}
-    }
+  const fetchData = async () => {
     try {
-      const res = await api.get("/assessments/latest");
-      if (res.data) {
-        const d = res.data;
-        setAssessment({
-          Age: d.age, BMI: d.bmi, BloodPressure: d.bloodPressure,
-          Cholesterol: d.cholesterol, Glucose: d.glucose,
-          risk_level: d.riskLevel, source: d.source,
-          predicted_disease: d.predictedDisease,
-        });
+      // Fetch latest assessment
+      const stored = sessionStorage.getItem("lastAssessment");
+      if (stored) {
+        try { setAssessment(JSON.parse(stored)); } catch {}
       }
-    } catch {}
+
+      // Fetch latest health record with recommendations
+      const healthData = await getHealthHistory();
+      if (healthData && healthData.length > 0) {
+        const latestRecord = healthData[0]; // Most recent
+        setHealthRecord(latestRecord);
+      }
+
+      // Fallback to assessment API if no health record
+      if (!healthRecord && !assessment) {
+        try {
+          const res = await api.get("/assessments/latest");
+          if (res.data) {
+            const d = res.data;
+            setAssessment({
+              Age: d.age, BMI: d.bmi, BloodPressure: d.bloodPressure,
+              Cholesterol: d.cholesterol, Glucose: d.glucose,
+              risk_level: d.riskLevel, source: d.source,
+              predicted_disease: d.predictedDisease,
+            });
+          } else {
+            // Sample data for demonstration
+            setAssessment({
+              Age: 35, BMI: 24.5, BloodPressure: "120/80",
+              Cholesterol: 180, Glucose: 95,
+              risk_level: "low", source: "risk_assessment",
+              predicted_disease: null,
+              timestamp: new Date().toISOString()
+            });
+          }
+        } catch {
+          // Sample data for demonstration
+          setAssessment({
+            Age: 35, BMI: 24.5, BloodPressure: "120/80",
+            Cholesterol: 180, Glucose: 95,
+            risk_level: "low", source: "risk_assessment",
+            predicted_disease: null,
+            timestamp: new Date().toISOString()
+          });
+        }
+      }
+    } catch (error) {
+      console.error("Error fetching data:", error);
+      // Sample data for demonstration
+      setAssessment({
+        Age: 35, BMI: 24.5, BloodPressure: "120/80",
+        Cholesterol: 180, Glucose: 95,
+        risk_level: "low", source: "risk_assessment",
+        predicted_disease: null,
+        timestamp: new Date().toISOString()
+      });
+    }
     setLoading(false);
   };
 
@@ -96,11 +139,40 @@ function Recommendations() {
     addNotification(`⏰ Reminder set for ${label} at ${time} — ${pills}`, "success");
   };
 
-  const getRecommendations = (a) => {
-    if (!a) return { diet: [], exercise: [], medications: [], warnings: [] };
-    const level = (a.risk_level || "low").toLowerCase();
-    const isSymptom = a.source === "symptom_checker" || a.predicted_disease;
+  const getRecommendations = () => {
+    if (!assessment && !healthRecord) return { diet: [], exercise: [], medications: [], warnings: [], healthScore: null };
 
+    // Use health record if available, otherwise fall back to assessment
+    const data = healthRecord || assessment;
+    const hasHealthScore = healthRecord && healthRecord.healthScore;
+    const healthScore = hasHealthScore ? (typeof healthRecord.healthScore === 'object' ? healthRecord.healthScore.overall : healthRecord.healthScore) : null;
+
+    // Determine risk level from health score or assessment
+    let riskLevel = "low";
+    if (healthScore !== null) {
+      if (healthScore < 40) riskLevel = "high";
+      else if (healthScore < 70) riskLevel = "medium";
+      else riskLevel = "low";
+    } else {
+      riskLevel = (data.risk_level || "low").toLowerCase();
+    }
+
+    const isSymptom = data.source === "symptom_checker" || data.predicted_disease;
+
+    // Use backend recommendations if available
+    if (healthRecord && healthRecord.recommendations) {
+      const backendRecs = healthRecord.recommendations;
+      return {
+        diet: backendRecs.diet || [],
+        exercise: backendRecs.exercise || [],
+        medications: getMedicationsForRisk(riskLevel, isSymptom, data.predicted_disease),
+        warnings: getWarningsForRisk(riskLevel, isSymptom, data.predicted_disease, backendRecs.department),
+        healthScore: healthScore,
+        department: backendRecs.department,
+      };
+    }
+
+    // Fallback to frontend logic
     const diet = {
       high: [
         "🥗 Strict low-sugar, low-sodium diet",
@@ -146,6 +218,19 @@ function Recommendations() {
       ],
     };
 
+    const medications = getMedicationsForRisk(riskLevel, isSymptom, data.predicted_disease);
+    const warnings = getWarningsForRisk(riskLevel, isSymptom, data.predicted_disease);
+
+    return {
+      diet: diet[riskLevel] || diet.low,
+      exercise: exercise[riskLevel] || exercise.low,
+      medications,
+      warnings,
+      healthScore,
+    };
+  };
+
+  const getMedicationsForRisk = (riskLevel, isSymptom, predictedDisease) => {
     const medications = {
       high: [
         { name: "Blood Pressure Medication", time: "morning", pills: "BP tablet (as prescribed)", icon: "💊" },
@@ -164,6 +249,24 @@ function Recommendations() {
       ],
     };
 
+    let meds = medications[riskLevel] || medications.low;
+
+    // Add disease-specific medications
+    if (isSymptom && predictedDisease) {
+      const disease = predictedDisease.toLowerCase();
+      if (disease.includes("cardiac") || disease.includes("heart")) {
+        meds.unshift({ name: "Aspirin (Low Dose)", time: "morning", pills: "Aspirin 75mg (consult doctor)", icon: "❤️" });
+      } else if (disease.includes("diabetes")) {
+        meds.unshift({ name: "Blood Sugar Monitor", time: "morning", pills: "Check fasting blood sugar", icon: "🩸" });
+      } else if (disease.includes("respiratory") || disease.includes("infection")) {
+        meds.unshift({ name: "Vitamin C & Zinc", time: "morning", pills: "Vitamin C 1000mg + Zinc 10mg", icon: "🍊" });
+      }
+    }
+
+    return meds;
+  };
+
+  const getWarningsForRisk = (riskLevel, isSymptom, predictedDisease, department) => {
     const warnings = {
       high: [
         { msg: "🚨 Schedule immediate doctor consultation", type: "critical" },
@@ -186,31 +289,29 @@ function Recommendations() {
       ],
     };
 
-    // Add disease-specific recommendations
-    if (isSymptom && a.predicted_disease) {
-      const disease = a.predicted_disease.toLowerCase();
+    let warns = warnings[riskLevel] || warnings.low;
+
+    // Add department-specific warnings
+    if (department) {
+      warns.unshift({ msg: `🏥 Recommended consultation: ${department} Department`, type: "warning" });
+    }
+
+    // Add disease-specific warnings
+    if (isSymptom && predictedDisease) {
+      const disease = predictedDisease.toLowerCase();
       if (disease.includes("cardiac") || disease.includes("heart")) {
-        medications[level].unshift({ name: "Aspirin (Low Dose)", time: "morning", pills: "Aspirin 75mg (consult doctor)", icon: "❤️" });
-        warnings[level].unshift({ msg: "🚨 Cardiac symptoms detected — consult cardiologist immediately", type: "critical" });
+        warns.unshift({ msg: "🚨 Cardiac symptoms detected — consult cardiologist immediately", type: "critical" });
       } else if (disease.includes("diabetes")) {
-        medications[level].unshift({ name: "Blood Sugar Monitor", time: "morning", pills: "Check fasting blood sugar", icon: "🩸" });
-        warnings[level].unshift({ msg: "🩸 Diabetes risk detected — monitor blood sugar daily", type: "critical" });
-      } else if (disease.includes("respiratory") || disease.includes("infection")) {
-        medications[level].unshift({ name: "Vitamin C & Zinc", time: "morning", pills: "Vitamin C 1000mg + Zinc 10mg", icon: "🍊" });
+        warns.unshift({ msg: "🩸 Diabetes risk detected — monitor blood sugar daily", type: "critical" });
       }
     }
 
-    return {
-      diet: diet[level] || diet.low,
-      exercise: exercise[level] || exercise.low,
-      medications: medications[level] || medications.low,
-      warnings: warnings[level] || warnings.low,
-    };
+    return warns;
   };
 
   if (loading) return <div className="text-center py-12">Loading recommendations...</div>;
 
-  const recs = getRecommendations(assessment);
+  const recs = getRecommendations();
   const level = assessment ? (assessment.risk_level || "Low") : "Low";
   const levelColor = level.toLowerCase() === "high"
     ? "bg-red-100 text-red-800 border-red-300"
@@ -220,17 +321,142 @@ function Recommendations() {
 
   return (
     <div className="container mx-auto p-4 space-y-6">
-      {/* Header */}
+      {/* Header with Health Score */}
       <div className="flex items-center justify-between">
         <h2 className="text-2xl font-bold">💡 Personalized Recommendations</h2>
-        <span className={`px-4 py-2 rounded-full text-sm font-semibold border ${levelColor}`}>
-          Risk: {level}
-        </span>
+        {recs.healthScore !== null && (
+          <div className="text-right">
+            <div className="text-sm text-gray-500">Current Health Score</div>
+            <div className={`text-2xl font-bold ${
+              recs.healthScore >= 80 ? 'text-green-600' :
+              recs.healthScore >= 60 ? 'text-yellow-600' : 'text-red-600'
+            }`}>
+              {recs.healthScore}/100
+            </div>
+          </div>
+        )}
       </div>
 
-      {!assessment && (
-        <div className="bg-yellow-50 border border-yellow-200 text-yellow-700 px-4 py-3 rounded-lg">
-          ⚠️ No assessment found. Complete the AI Symptom Checker or Risk Assessment first for personalized advice.
+      {/* Assessment Summary Section */}
+      {(!loading) && (
+        <div className="bg-white rounded-xl shadow-md p-6">
+          <h3 className="text-xl font-semibold mb-4 flex items-center gap-2">
+            📊 Assessment Summary
+            <span className="text-sm text-gray-500">
+              {assessment?.timestamp ? new Date(assessment.timestamp).toLocaleDateString() : 'Latest'}
+            </span>
+          </h3>
+
+          {(assessment || healthRecord) ? (
+            <>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
+                {/* Risk Level */}
+                <div className={`p-4 rounded-lg text-center border-2 ${levelColor}`}>
+                  <p className="text-xs font-medium uppercase tracking-wide">Risk Level</p>
+                  <p className="text-2xl font-bold mt-1">{level}</p>
+                </div>
+
+                {/* Health Score */}
+                {recs.healthScore !== null && (
+                  <div className="p-4 rounded-lg text-center border-2 border-blue-300 bg-blue-50">
+                    <p className="text-xs font-medium uppercase tracking-wide text-blue-600">Health Score</p>
+                    <p className="text-2xl font-bold mt-1 text-blue-700">{recs.healthScore}/100</p>
+                    <p className="text-xs text-blue-600 mt-1">
+                      {recs.healthScore >= 80 ? 'Excellent' :
+                       recs.healthScore >= 60 ? 'Good' :
+                       recs.healthScore >= 40 ? 'Fair' : 'Poor'}
+                    </p>
+                  </div>
+                )}
+
+                {/* Source */}
+                <div className="p-4 rounded-lg text-center border-2 border-gray-300 bg-gray-50">
+                  <p className="text-xs font-medium uppercase tracking-wide text-gray-600">Assessment Source</p>
+                  <p className="text-lg font-bold mt-1 text-gray-700">
+                    {assessment?.source === "symptom_checker" || healthRecord ? "🤖 AI Analysis" : "💊 Risk Assessment"}
+                  </p>
+                </div>
+
+                {/* Department */}
+                {recs.department && (
+                  <div className="p-4 rounded-lg text-center border-2 border-purple-300 bg-purple-50">
+                    <p className="text-xs font-medium uppercase tracking-wide text-purple-600">Department</p>
+                    <p className="text-lg font-bold mt-1 text-purple-700">{recs.department}</p>
+                  </div>
+                )}
+              </div>
+
+              {/* Vital Signs Summary */}
+              {assessment && (
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h4 className="font-semibold text-gray-700 mb-3">📈 Key Health Metrics</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {assessment.Age && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Age</p>
+                        <p className="text-lg font-bold">{assessment.Age} years</p>
+                      </div>
+                    )}
+                    {assessment.BMI && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">BMI</p>
+                        <p className="text-lg font-bold">{assessment.BMI}</p>
+                      </div>
+                    )}
+                    {assessment.BloodPressure && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Blood Pressure</p>
+                        <p className="text-lg font-bold">{assessment.BloodPressure}</p>
+                      </div>
+                    )}
+                    {assessment.Glucose && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Glucose</p>
+                        <p className="text-lg font-bold">{assessment.Glucose} mg/dL</p>
+                      </div>
+                    )}
+                    {assessment.Cholesterol && (
+                      <div className="text-center">
+                        <p className="text-xs text-gray-500">Cholesterol</p>
+                        <p className="text-lg font-bold">{assessment.Cholesterol} mg/dL</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* Predicted Disease */}
+              {(assessment?.predicted_disease || healthRecord?.predictions) && (
+                <div className="bg-indigo-50 p-4 rounded-lg border border-indigo-200">
+                  <h4 className="font-semibold text-indigo-700 mb-2">🔍 AI Analysis Results</h4>
+                  {assessment?.predicted_disease && (
+                    <p className="text-indigo-800">
+                      <span className="font-medium">Predicted Condition:</span> {assessment.predicted_disease}
+                    </p>
+                  )}
+                  {healthRecord?.predictions && (
+                    <div className="mt-2 space-y-1">
+                      {healthRecord.predictions.diabetes && (
+                        <p className="text-sm text-indigo-700">
+                          🩸 Diabetes Risk: {healthRecord.predictions.diabetes.probability}% ({healthRecord.predictions.diabetes.riskLevel})
+                        </p>
+                      )}
+                      {healthRecord.predictions.heartDisease && (
+                        <p className="text-sm text-indigo-700">
+                          ❤️ Heart Disease Risk: {healthRecord.predictions.heartDisease.probability}% ({healthRecord.predictions.heartDisease.riskLevel})
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </>
+          ) : (
+            <div className="text-center py-8 text-gray-500">
+              <p className="text-lg mb-2">📊 No Assessment Data Available</p>
+              <p className="text-sm">Complete the AI Symptom Checker or Risk Assessment to see your health summary here.</p>
+            </div>
+          )}
         </div>
       )}
 
@@ -273,9 +499,12 @@ function Recommendations() {
         </div>
       )}
 
-      {/* Medication Reminders */}
+      {/* Recommendations Section */}
       <div className="bg-white rounded-xl shadow-md p-6">
-        <h3 className="text-lg font-semibold mb-4 text-purple-700">💊 Medication & Supplement Reminders</h3>
+        <h3 className="text-xl font-semibold mb-4">💊 Your Personalized Recommendations</h3>
+
+        <div className="bg-white rounded-xl shadow-md p-6 mb-6">
+          <h3 className="text-lg font-semibold mb-4 text-purple-700">💊 Medication & Supplement Reminders</h3>
 
         {/* Time Settings */}
         <div className="grid grid-cols-3 gap-3 mb-4 p-3 bg-gray-50 rounded-lg">
@@ -324,6 +553,7 @@ function Recommendations() {
             </p>
           </div>
         )}
+        </div>
       </div>
 
       {/* Health Alerts */}

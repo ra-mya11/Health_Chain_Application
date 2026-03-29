@@ -25,4 +25,11 @@ public class AuthController {
     public ResponseEntity<AuthResponse> login(@RequestBody LoginRequest request) {
         return ResponseEntity.ok(authService.login(request));
     }
+
+    @GetMapping("/resolve-id")
+    public ResponseEntity<?> resolveId(@RequestParam String email) {
+        return authService.resolveIdByEmail(email)
+                .map(id -> ResponseEntity.ok(java.util.Map.of("userId", id)))
+                .orElse(ResponseEntity.notFound().build());
+    }
 }

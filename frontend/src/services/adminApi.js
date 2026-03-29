@@ -4,7 +4,7 @@
 import axios from "axios";
 import { getToken } from "../utils/auth";
 
-const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8080/api";
+const BASE_URL = process.env.REACT_APP_API_URL || "http://localhost:8081/api";
 
 // Add authorization header to all requests
 axios.interceptors.request.use(
@@ -71,6 +71,10 @@ export const getAppointmentsByStatus = (status) =>
   axios.get(`${BASE_URL}/admin/appointments/status/${status}`);
 export const cancelAppointment = (appointmentId) =>
   axios.patch(`${BASE_URL}/admin/appointments/${appointmentId}/cancel`);
+export const completeAppointment = (appointmentId) =>
+  axios.patch(`${BASE_URL.replace('/admin', '')}/appointments/${appointmentId}/status`, {
+    status: 'COMPLETED'
+  });
 export const rescheduleAppointment = (appointmentId, newTime) =>
   axios.put(
     `${BASE_URL}/admin/appointments/${appointmentId}/reschedule`,
@@ -85,6 +89,10 @@ export const fetchAllMedicalRecords = () =>
   axios.get(`${BASE_URL}/admin/records`);
 export const getPatientMedicalRecords = (patientId) =>
   axios.get(`${BASE_URL}/admin/records/patient/${patientId}`);
+export const getIpfsFile = (cid) =>
+  axios.get(`${BASE_URL.replace('/admin', '')}/records/ipfs/${cid}`, { responseType: 'blob' });
+export const getBlockchainTx = (txHash) =>
+  axios.get(`${BASE_URL.replace('/admin', '')}/records/blockchain/tx/${txHash}`);
 
 // AI Prediction Logs APIs
 export const fetchPredictionLogs = () => axios.get(`${BASE_URL}/admin/ai/logs`);
@@ -100,6 +108,9 @@ export const fetchUnsentNotifications = () =>
   axios.get(`${BASE_URL}/admin/notifications/unsent`);
 export const broadcastNotification = (notificationId) =>
   axios.patch(`${BASE_URL}/admin/notifications/${notificationId}/broadcast`);
+
+export const fetchNotificationsForRole = (role) =>
+  axios.get(`${BASE_URL}/appointments/notifications`, { params: { role } });
 
 // Analytics APIs
 export const fetchAnalytics = () => axios.get(`${BASE_URL}/admin/analytics`);

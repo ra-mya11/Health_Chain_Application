@@ -1,10 +1,14 @@
 package com.healthcare.medicalrecords.controller;
 
+import com.healthcare.medicalrecords.repository.AdminUserRepository;
 import com.healthcare.medicalrecords.dto.DoctorDto;
+import com.healthcare.medicalrecords.entity.Notification;
+import com.healthcare.medicalrecords.repository.NotificationRepository;
 import com.healthcare.medicalrecords.service.AppointmentService;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -14,9 +18,32 @@ import java.util.Map;
 public class AppointmentController {
 
     private final AppointmentService appointmentService;
+    private final NotificationRepository notificationRepository;
+    private final AdminUserRepository userRepository;
 
-    public AppointmentController(AppointmentService appointmentService) {
+    public AppointmentController(AppointmentService appointmentService,
+            NotificationRepository notificationRepository,
+            AdminUserRepository userRepository) {
         this.appointmentService = appointmentService;
+        this.notificationRepository = notificationRepository;
+        this.userRepository = userRepository;
+    }
+
+    // Resolve MySQL numeric id by email — called after login
+    @GetMapping("/resolve-id")
+    public ResponseEntity<Map<String, Object>> resolveId(@RequestParam String email) {
+        return userRepository.findByEmail(email)
+            .map(u -> ResponseEntity.ok(Map.<String, Object>of("mysqlId", u.getId(), "name", u.getName())))
+            .orElse(ResponseEntity.ok(Map.of()));
+    }
+
+    @GetMapping("/notifications")
+    public ResponseEntity<List<Notification>> getNotificationsForRole(@RequestParam String role) {
+        List<Notification.TargetRole> roles = Arrays.asList(
+            Notification.TargetRole.ALL,
+            Notification.TargetRole.valueOf(role.toUpperCase())
+        );
+        return ResponseEntity.ok(notificationRepository.findByTargetRoleInAndSentAtIsNotNull(roles));
     }
 
     @GetMapping("/doctors/available")
@@ -52,8 +79,10 @@ public class AppointmentController {
     }
 
     @GetMapping("/my-appointments")
-    public ResponseEntity<List<Map<String, Object>>> getMyAppointments(@RequestParam Long patientId) {
-        return ResponseEntity.ok(appointmentService.getPatientAppointments(patientId));
+    public ResponseEntity<List<Map<String, Object>>> getMyAppointments(
+            @RequestParam(required = false) Long patientId,
+            @RequestParam(required = false) String patientEmail) {
+        return ResponseEntity.ok(appointmentService.getPatientAppointments(patientId, patientEmail));
     }
 
     @GetMapping("/doctor-appointments")
@@ -78,9 +107,9 @@ public class AppointmentController {
     }
 
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> cancelAppointment(
-            @PathVariable Long id, @RequestParam Long patientId) {
-        appointmentService.cancelAppointment(id, patientId);
-        return ResponseEntity.noContent().build();
+    public ResponseEntity<Map<String, String>> cancelAppointment(@PathVariable Long id) {
+        // No parameters needed - authorization is handled in service layer
+        appointmentService.cancelAppointment(id);
+        return ResponseEntity.ok(Map.of("message", "Appointment cancelled successfully"));
     }
 }

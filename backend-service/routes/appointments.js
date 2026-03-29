@@ -112,7 +112,7 @@ router.get('/doctor-appointments', auth, authorize('doctor'), async (req, res) =
     const appointments = await Appointment.find({
       doctor: req.userId
     })
-    .populate('patient', 'name phone email')
+    .populate('patient', 'name phone email _id')
     .sort({ date: 1 });
     
     res.json(appointments);
@@ -153,24 +153,41 @@ router.patch('/:id/status', auth, async (req, res) => {
   }
 });
 
-// Cancel appointment
+// Cancel/Clear appointment
 router.delete('/:id', auth, async (req, res) => {
   try {
-    const appointment = await Appointment.findById(req.params.id);
+    const appointmentId = req.params.id;
+    console.log("Attempting to delete appointment:", appointmentId);
+    console.log("Doctor ID from token:", req.userId);
+    
+    const appointment = await Appointment.findById(appointmentId);
     
     if (!appointment) {
+      console.log("Appointment not found");
       return res.status(404).json({ error: 'Appointment not found' });
     }
     
-    if (appointment.patient.toString() !== req.userId.toString()) {
+    console.log("Appointment doctor:", appointment.doctor.toString());
+    console.log("Appointment patient:", appointment.patient.toString());
+    
+    // Allow both patient and doctor to delete/clear the appointment
+    const isPatient = appointment.patient.toString() === req.userId.toString();
+    const isDoctor = appointment.doctor.toString() === req.userId.toString();
+    
+    console.log("Is Patient:", isPatient, "Is Doctor:", isDoctor);
+    
+    if (!isPatient && !isDoctor) {
+      console.log("Access denied - not patient or doctor");
       return res.status(403).json({ error: 'Access denied' });
     }
     
-    appointment.status = 'cancelled';
-    await appointment.save();
+    // Completely delete the appointment record
+    await Appointment.findByIdAndDelete(appointmentId);
+    console.log("Appointment deleted successfully");
     
-    res.json({ message: 'Appointment cancelled' });
+    res.json({ message: 'Appointment cleared successfully' });
   } catch (error) {
+    console.error("Delete appointment error:", error);
     res.status(500).json({ error: error.message });
   }
 });

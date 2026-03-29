@@ -42,7 +42,7 @@ app.use((err, req, res, next) => {
     .json({ error: "Something went wrong!", message: err.message });
 });
 
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 8080;
 app.listen(PORT, () => {
   console.log(`✓ Backend server running on port ${PORT}`);
 });
